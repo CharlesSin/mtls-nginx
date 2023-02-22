@@ -3,11 +3,13 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const forge = require("node-forge");
+const md5 = require("md5");
+const cors = require("cors");
 
 const port = 3000;
 
 const options = {
-  ca: fs.readFileSync(path.resolve(__dirname, "./certs/ca.crt")),
+  // ca: fs.readFileSync(path.resolve(__dirname, "./certs/ca.crt")),
   cert: fs.readFileSync(path.resolve(__dirname, "./certs/server.crt")),
   key: fs.readFileSync(path.resolve(__dirname, "./certs/server.key")),
   rejectUnauthorized: false,
@@ -16,93 +18,73 @@ const options = {
 
 const app = express();
 
+const server = https.createServer(options, app);
+server.listen(port, () => {
+  console.log(`.. server up and running and listening on ${port} ..`);
+});
+
+app.use(cors());
+app.use(express.static(path.join(__dirname, "public")));
+
+// Socket Begin
+const io = require("socket.io")();
+
+const servIo = io.listen(server, {
+  cors: true,
+  origin: "*",
+  credentials: true,
+  forceBase64: true,
+});
+
+servIo.on("connection", function (socket) {
+  // console.log({ socket });
+
+  setInterval(function () {
+    socket.emit("second", { second: new Date().getTime() });
+  }, 1000);
+});
+// Socket End
+
 app.get("/", (req, res) => {
   if (!isEmpty(req.socket.getPeerCertificate())) {
     console.log("Inside IF");
     return verify_certificate(req, res);
   }
 
-  if (req.header("ssl_client_verify") !== "SUCCESS") return res.status(403).send("Forbidden - please provide valid certificate.");
+  // if (req.header("ssl_client_verify") !== "SUCCESS") return res.status(403).send("Forbidden - please provide valid certificate.");
+  // TLSVersion,Ciphers,Extensions,EllipticCurves,EllipticCurvePointFormats
 
-  const sslCert = req.header("X-SSL-CERT");
-  const cert = decodeURIComponent(sslCert);
-  const forgeCert = forge.pki.certificateFromPem(cert);
+  let ellipticCurvesArr = req.header("ssl_curves")?.split(":");
+  let cipherArr = req.header("ssl_cipher");
+  let ciphersArr = req.header("ssl_ciphers")?.split(":");
+  let tls_version = req.header("X-HTTPS-Protocol");
 
-  console.log("X-Forwarded-For");
-  console.log(req.header("X-Forwarded-For"));
-  console.log("X-Forwarded-Proto");
-  console.log(req.header("X-Forwarded-Proto"));
-  console.log("X-HTTPS-Protocol");
-  console.log(req.header("X-HTTPS-Protocol"));
-  console.log("X-SSL-CERT");
-  console.log(req.header("X-SSL-CERT"));
-  console.log("X-SSL-FP");
-  console.log(req.header("X-SSL-FP"));
-  console.log("ssl_protocol");
-  console.log(req.header("ssl_protocol"));
-  console.log("X-User-Agent");
-  console.log(req.header("X-User-Agent"));
-  console.log("X-FP");
-  console.log(req.header("X-FP"));
-  console.log("X-FP-Hash");
-  console.log(req.header("X-FP-Hash"));
-  console.log("X-SSL-Greased");
-  console.log(req.header("X-SSL-Greased"));
-  console.log("ssl_curves");
-  console.log(req.header("ssl_curves"));
-  console.log("ssl_cipher");
-  console.log(req.header("ssl_cipher"));
-  console.log("ssl_ciphers");
-  console.log(req.header("ssl_ciphers"));
-  console.log("ssl_server_name");
-  console.log(req.header("ssl_server_name"));
-  console.log("ssl_client_fingerprint");
-  console.log(req.header("ssl_client_fingerprint"));
-  console.log("ssl_session_id");
-  console.log(req.header("ssl_session_id"));
+  let ellipticCurves = "";
+  let ciphers = "";
 
-  res.status(200).json(`Hello 1 ${req.header("ssl_client")}, your certificate was issued by ${req.header("SSL_Client_Issuer")}!`);
-});
+  ellipticCurvesArr.forEach((item) => {
+    ellipticCurves += `${item}-`;
+  });
 
-https.createServer(options, app).listen(port, () => {
-  console.log(`.. server up and running and listening on ${port} ..`);
+  ciphersArr.forEach((item) => {
+    ciphers += `${item}-`;
+  });
+
+  ellipticCurves = ellipticCurves.slice(0, -1) + "";
+  ciphers = ciphers.slice(0, -1) + "";
+
+  const ja3_str = `${tls_version},${ellipticCurves},${ciphers}`;
+  const ja3hash = md5(ja3_str);
+
+  console.log("outside if");
+  console.log(ja3_str);
+  console.log(ja3hash);
+
+  res.sendFile("./index.html", { root: __dirname });
 });
 
 function verify_certificate(request, response) {
   const cert = request.socket.getPeerCertificate();
-
-  console.log("X-Forwarded-For");
-  console.log(req.header("X-Forwarded-For"));
-  console.log("X-Forwarded-Proto");
-  console.log(req.header("X-Forwarded-Proto"));
-  console.log("X-HTTPS-Protocol");
-  console.log(req.header("X-HTTPS-Protocol"));
-  console.log("X-SSL-CERT");
-  console.log(req.header("X-SSL-CERT"));
-  console.log("X-SSL-FP");
-  console.log(req.header("X-SSL-FP"));
-  console.log("ssl_protocol");
-  console.log(req.header("ssl_protocol"));
-  console.log("X-User-Agent");
-  console.log(req.header("X-User-Agent"));
-  console.log("X-FP");
-  console.log(req.header("X-FP"));
-  console.log("X-FP-Hash");
-  console.log(req.header("X-FP-Hash"));
-  console.log("X-SSL-Greased");
-  console.log(req.header("X-SSL-Greased"));
-  console.log("ssl_curves");
-  console.log(req.header("ssl_curves"));
-  console.log("ssl_cipher");
-  console.log(req.header("ssl_cipher"));
-  console.log("ssl_ciphers");
-  console.log(req.header("ssl_ciphers"));
-  console.log("ssl_server_name");
-  console.log(req.header("ssl_server_name"));
-  console.log("ssl_client_fingerprint");
-  console.log(req.header("ssl_client_fingerprint"));
-  console.log("ssl_session_id");
-  console.log(req.header("ssl_session_id"));
 
   if (request.client.authorized) {
     return response.send(`Hello 2 ${cert.subject.CN}, your certificate was issued by ${cert.issuer.CN}!`);

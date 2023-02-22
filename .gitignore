@@ -1,4 +1,6 @@
 /certs/
+/CA/
+/CA/*
 /node-server/certs/
 /node-server/node_modules/
 /.idea/
